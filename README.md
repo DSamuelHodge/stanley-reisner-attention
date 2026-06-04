@@ -78,7 +78,7 @@ A non-zero β_{i,j} means there exists a set of j tokens whose induced co-attent
 ## Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/sr-attention.git
+git clone https://git.hodgederrick.com/hodge360/stanley-reisner-attention
 cd sr-attention
 pip install -e ".[dev]"
 ```
