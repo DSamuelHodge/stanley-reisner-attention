@@ -256,7 +256,7 @@ If you use this framework in research, please cite:
 @software{sr_attention_2026,
   title  = {Stanley–Reisner Ideals for Transformer Attention Analysis},
   year   = {2026},
-  url    = {https://github.com/YOUR_USERNAME/sr-attention},
+  url    = {https://git.hodgederrick.com/hodge360/stanley-reisner-attention},
   note   = {Novel framework bridging algebraic combinatorics and mechanistic interpretability}
 }
 ```
