@@ -2,42 +2,61 @@
 
 ## 1. The Mathematical Object
 
-Let Δ be a finite simplicial complex on vertex set V = {1, …, n}. For each
-nonempty W ⊆ V write Δ_W for the induced subcomplex on W.
+Let Δ be a finite simplicial complex on vertex set V = {1, …, n}. For
+each W ⊆ V write Δ_W for the induced subcomplex on W.
 
 **Pushforward measure.** Fix 0 ≤ j ≤ n and let Ωⱼ = {W ⊆ V : |W| = j}.
-Define:
+Let SimpCompⱼ be the set of simplicial complexes on at most j labelled
+vertices.  Define the quotient:
 
- φⱼ : Ωⱼ ⟶ Types, φⱼ(W) = isomorphism_class(Δ_W)
+ Typesⱼ ≔ SimpCompⱼ / ≅
 
-where Types is the set of isomorphism types of simplicial complexes on
-≤ j vertices.  Uniform(Ωⱼ) is the uniform probability measure on Ωⱼ.
-The **Hochster pushforward** is:
+and the map:
 
- μⱼ ≔ (φⱼ)₊ Uniform(Ωⱼ)  ⟹  μⱼ(C) = |{W : Δ_W ≅ C}| / C(n, j)
+ φⱼ : Ωⱼ → Typesⱼ, φⱼ(W) = [Δ_W] (the isomorphism class)
 
-**Hochster Isomorphism Spectrum.**  Refining each graded Betti number
-β_{i,j}(k[Δ]) from Hochster's formula:
+Uniform(Ωⱼ) is the uniform probability measure on Ωⱼ.  The **Hochster
+pushforward** is:
+
+ μⱼ ≔ (φⱼ)₊ Uniform(Ωⱼ) ⟹ μⱼ(C) = |{W : Δ_W ≅ C}| / C(n, j)
+
+This is the **empirical distribution of induced subcomplex isomorphism
+types at size j** — a probability measure on the finite set Typesⱼ.
+
+**Hochster Isomorphism Spectrum (corrected).**  Refining Hochster's formula
 
  β_{i,j} = Σ_{|W|=j} dim H̃_{j-i-1}(Δ_W)
 
-we record the full type stratification:
+define a **decorated probability measure**:
 
- H_{i,j}(Δ) = { (C, m_C, H̃_*(C)) : C ∈ Types, m_C = μⱼ(C)·C(n,j) }
+ ℋ_{i,j}(Δ) ≔ (μⱼ, C ↦ dim H̃_{j-i-1}(C))
 
-where H̃_*(C) is the reduced homology vector of the type.
+i.e. the measure μⱼ on Typesⱼ together with a homology-decoration
+functor from Typesⱼ to ℕ.  The classical Betti number is recovered as:
+
+ β_{i,j} = C(n, j) · 𝔼_{C∼μⱼ}[dim H̃_{j-i-1}(C)]
+
+This formulation keeps the invariant categorical (a measure + a
+functor) rather than an ad-hoc set.
 
 **Entropy profile.**  The Shannon entropy of the type distribution:
 
- Hⱼ(Δ) ≔ H(μⱼ) = − Σ_C μⱼ(C) log₂ μⱼ(C)
+ Hⱼ(Δ) ≔ H(μⱼ) = − Σ_{C ∈ Typesⱼ} μⱼ(C) log₂ μⱼ(C)
 
-**Phase classification.**  Let H_max = max_k Hₖ and fix ε ∈ (0, 1).
-Define:
+Hⱼ depends **only** on the pushforward measure μⱼ, not on the
+Betti/Hochster structure.  In general, Hⱼ is strictly finer than the
+Betti table: two complexes with identical Betti numbers can have
+different entropy profiles (because different type distributions can
+produce the same aggregate homology sum).
+
+**Phase classification (construction).**  Let H_max = max_k Hₖ and fix
+ε ∈ (0, 1).  Define:
 
  j₁ = min{j ≥ 2 : Hⱼ ≥ ε·H_max}
  j₂ = max{j ≥ 2 : Hⱼ ≥ ε·H_max}
 
-The **combinatorial phases** are:
+The **combinatorial phases** are a functional construction, not a
+theorem:
 
 | Regime | j | Behaviour |
 |--------|---|-----------|
@@ -45,152 +64,218 @@ The **combinatorial phases** are:
 | Diverse | j₁ ≤ j ≤ j₂ | Many types; Hⱼ at maximum |
 | Collapse | j > j₂ | Types contract; Hⱼ → 0 |
 
-## 2. The Hiding Theorem: Hochster Entropy Comparison
+Empirically this three-regime structure appears across all attention
+graphs tested, but it is a **descriptive classification**, not a
+proved property of general complexes.
 
-For two simplicial complexes Δ, Δ' on the same vertex set V, write
-Δ ⊆ Δ' if every simplex of Δ is also a simplex of Δ' (edgewise
-inclusion).  Write [Δ] for the isomorphism class.
+---
 
-**Lemma A (Functoriality of μⱼ).**  For any inclusion ι : Δ ⟶ Δ'
-(same V), the map φⱼ factors:
+## 2. Results That Survive Scrutiny
 
- Ωⱼ —[φⱼ^{(Δ)}]→ Types —[r]→ Types(W)
+### 2.1 Elementary Support-Size Bound
 
-where r sends a type [Δ_W] to its relabelling under ι.  Consequently
-μⱼ^{(Δ')} is the pushforward of μⱼ^{(Δ)} through the map that forgets
-faces.
+Hⱼ(Δ) ≤ log₂ |Typesⱼ|
 
-There is no general monotonicity of entropy under edge addition
-(Example: empty graph has H₂ = 0; adding one edge raises H₂ > 0).
-Instead, the correct structure is a **comparison principle** through
-the Betti table.
+This is immediate from the definition: maximum entropy of a
+distribution on a finite set of size N is log₂ N.  No Betti numbers
+appear.
 
-**Theorem 1 (Hochster Information Inequality).**
+A tighter bound exists if one knows the number of homologically active
+types:
 
- Hⱼ(Δ) ≤ log₂(1 + Σ_i β_{i,j}(Δ))
+ Hⱼ(Δ) ≤ log₂( |Supp(μⱼ)| ) where |Supp(μⱼ)| ≤ C(n, j)
 
-with equality iff every isomorphism type at scale j has a distinct
-homology vector.  In particular, the Betti table determines an upper
-bound on the entropy profile.
+The claimed inequality Hⱼ ≤ log₂(1 + Σ_i β_{i,j}) from the earlier
+draft is **false in general**: two distinct isomorphism types can have
+identical homology, collapsing multiple types into the same Betti
+contribution.  There is no injective map from types to Betti summands,
+so the Betti sum does not bound the support size.
 
-*Proof.*  Each type C ∈ Supp(μⱼ) contributes at least one unit to
-some Betti number when it carries non-trivial reduced homology.  Let
-T₀ be the homologically trivial type (if it occurs) and
-T₊ = Supp(μⱼ) \ {T₀}.  Then |T₊| ≤ Σ_i β_{i,j} because each
-contributing subset W is counted in some β_{i,j}.  The total support
-size |Supp(μⱼ)| ≤ 1 + Σ_i β_{i,j}.  Maximising Hⱼ over probability
-vectors with this support size gives log₂|Supp|.  □
+**Correction.**  The correct relationship between entropy and Betti
+numbers is the expectation identity:
 
-**Theorem 2 (Phase Boundary Homology Bound).**  Let Sⱼ = Σ_i β_{i,j}.
-The phase boundaries satisfy:
+ β_{i,j} = C(n, j) · 𝔼_{C∼μⱼ}[dim H̃_{j-i-1}(C)]
 
- j₁ ≥ min{j : log₂(1 + Sⱼ) ≥ ε·H_max}
- j₂ ≤ max{j : log₂(1 + Sⱼ) ≥ ε·H_max}
+but this does **not** imply an inequality for Hⱼ.
 
-*Proof.*  Since Hⱼ ≤ log₂(1 + Sⱼ) by Theorem 1, if Hⱼ ≥ ε·H_max then
-log₂(1 + Sⱼ) ≥ ε·H_max.  The thresholds are monotone in j.  □
+### 2.2 Stability Under Edge Perturbations
 
-**Theorem 3 (Stability Under Edit Distance).**  Let Δ, Δ' differ by at
-most k edge insertions/deletions.  Then for each j:
+Let Δ, Δ' be two simplicial complexes on the same vertex set V that
+differ by at most k edge insertions/deletions.
 
- |Hⱼ(Δ) − Hⱼ(Δ')| ≤ k · C(n−2, j−2) / C(n, j) · log₂(C(n, j) − 1)
+**Theorem (Stability).**  For each j ≥ 2:
 
-For fixed j and n → ∞, the right-hand side is O(k·j²/n²).
+ |Hⱼ(Δ) − Hⱼ(Δ')| ≤ k · C(n−2, j−2) / C(n, j) · log₂(|Typesⱼ|)
 
-*Proof.*  Changing one edge alters the induced subcomplex type for
-exactly C(n−2, j−2) subsets W (those containing both endpoints).  The
-total variation distance between μⱼ and μⱼ' is bounded by
-k·C(n−2, j−2)/C(n, j).  Entropy is Lipschitz in TV distance with
-constant log₂(|Types| − 1).  □
+For fixed j and n → ∞, the right-hand side scales as O(k · j²/n²).
 
-## 3. The Missing Steps Toward a Publication
+*Proof.*  One edge affects the induced subcomplex type for exactly
+C(n−2, j−2) subsets W (those containing both endpoints).  Hence the
+total variation distance between μⱼ and μⱼ' satisfies:
 
-### 3.1 Correct Functor Category
+ d_TV(μⱼ, μⱼ') ≤ k · C(n−2, j−2) / C(n, j)
 
-The functor Δ ⟼ {μⱼ} is not a functor to Meas in the usual sense
-because inclusions do not induce a deterministic map on Types (adding
-an edge can merge types).  The correct target is the category of
-**Markov kernels**: an inclusion ι : Δ ↪ Δ' induces a kernel
-K_ι : Types(Δ) → Types(Δ') defined by K_ι(C, C') = 1 if every
-edge of C is also an edge of C', and 0 otherwise.  Then:
+Entropy is Lipschitz in total variation with constant
+log₂(|Typesⱼ| − 1) ≤ log₂(|Typesⱼ|).  The stated bound follows.  The
+asymptotic scaling for fixed j uses C(n−2, j−2)/C(n, j) ∼ j²/n².  □
 
- μⱼ^{(Δ')} = K_ι ∘ μⱼ^{(Δ)}
+The constant log₂(|Typesⱼ|) is finite (Typesⱼ is a finite set) and
+grows roughly like the number of unlabelled graphs on j vertices,
+i.e. ∼ 2^{C(j,2)} / j! for the 1-skeleton case.
 
-That μⱼ defines a **functor to the category of Markov kernels** is
-the correct categorical formulation.
+This is the **only inequality in the note that is both non-trivial and
+rigorously correct**.  It makes the entropy profile a Lipschitz
+function of the graph in edit distance, which is essential for any
+statistical use.
 
-### 3.2 Sharpness of the Information Inequality
+### 2.3 Phase Decomposition Is a Valid Construction
 
-Theorem 1 is an upper bound.  The real content would be a **lower
-bound** — or an asymptotic equality — linking Hⱼ to the Betti table.
-Conjecture:
+The assignment Δ ↦ (j₁, j₂, {Hⱼ}) is a well-defined functional
+construction.  It is:
 
- For any Δ and any ε > 0, there exist j and i such that
- β_{i,j} ≥ 2^{(1−ε)Hⱼ}.
+* **invariant** under relabelling of vertices (since μⱼ is)
+* **computable** for n ≤ HOCHSTER_MAX_VERTICES (currently 12)
+* **empirically stable** — runs on GPT-2 and Qwen heads produce
+  consistent three-regime profiles
 
-If true, this would make the entropy profile a **proxy for the Betti
-table** and vice versa.  This is the deepest open claim.
+It is **not** a theorem about the existence of phase transitions in
+general complexes.  It is an algorithm for classifying scales.
+Whether the three-regime structure holds for broad classes of
+complexes is an open empirical question.
 
-### 3.3 Dense Graph Limit (Graphon) Convergence
+---
 
-Let (G_n) be a sequence of graphs converging to a graphon W in the
-cut metric (Lovász–Szegedy).  Conjecture:
+## 3. Structural Corrections to Earlier Claims
 
- For each fixed j, the pushforward measure μⱼ^{(G_n)} converges
- weakly to μⱼ^{(W)}, and Hⱼ(G_n) → Hⱼ(W).
+### 3.1 Categorical Status (corrected)
 
-In the graphon limit, the phase boundaries j₁, j₂ scale with n:
-j₁ ≈ α₁ n, j₂ ≈ α₂ n for constants α₁(W), α₂(W) ∈ (0, 1)
-determined by the degree distribution of W.  This turns the
-phase diagram into a **graphon invariant**.
+The map Δ ⟼ μⱼ is **not** a functor to the category of Markov
+kernels.  The issue is that the quotient by isomorphism (Typesⱼ) is
+not natural under inclusions: an inclusion ι : Δ → Δ' induces a map
+on labelled complexes but does not descend to a well-defined
+deterministic map on isomorphism classes, because two non-isomorphic
+induced subcomplexes of Δ can become isomorphic when embedded in
+Δ' (if the extra faces of Δ' erase the distinction).
 
-### 3.4 Representation Stability
+The correct target is:
 
-The symmetric group S_n acts on Ωⱼ by permuting vertices.  For
-attention graphs, this action is **not** transitive on types
-(different isomorphism classes have different orbit sizes).  The
-multiplicity m_C = μⱼ(C)·C(n, j) is the size of the S_n-orbit of
-type C.  The entropy Hⱼ is the **orbit-entropy** — the Shannon
-entropy of the orbit distribution.
+ FinSimp —→ Prob(𝒢ⱼ)
 
-Conjecture (Stability): For a fixed graphon W and a sequence of
-graphs G_n → W, the orbit multiplicities satisfy:
+where 𝒢ⱼ is the **groupoid** of simplicial complexes on at most j
+vertices with isomorphisms as morphisms.  A functor to Prob(𝒢ⱼ) sends
+each Δ to a probability measure on the isomorphism classes
+(Obj(𝒢ⱼ)/≅), which is precisely μⱼ.  This is conceptually clean but
+requires groupoid-valued measure theory to make precise — a
+non-trivial categorical overhead that is beyond the scope of this
+note.
 
- lim_{n→∞} m_C^{(n)} / C(n, j) = t(C, W)
+### 3.2 Graphon Convergence (corrected)
 
-where t(C, W) = ∫ ∏_{e∈E(C)} W(x_e) ∏_{e∉E(C)} (1−W(x_e)) dx_1…dx_j
-is the **induced subgraph density** of C in W.  This connects the
-pushforward measure to graph limit theory.
+The claim "μⱼ^{(G_n)} converges weakly to μⱼ^{(W)}" is **not
+currently supported**.  Graphon convergence gives convergence of
+**induced subgraph densities**:
 
-### 3.5 Application to Attention Heads
+ t(C, G_n) → t(C, W) for every fixed graph C
+
+but this is not the same as convergence of the full measure μⱼ (which
+lives on Typesⱼ, a space that grows in size with j).  For fixed j,
+the space Typesⱼ is fixed, and each type C has density t(C, G_n).
+Graphon convergence implies:
+
+ lim_{n→∞} μⱼ^{(G_n)}(C) = t(C, W) / Σ_{C' ∈ Typesⱼ} t(C', W)
+
+i.e. the **normalised type frequencies** converge.  This is a
+consequence of the Graphon Sampling Lemma (Lovász, 2012, §10) and is
+**already a theorem**, not a conjecture.  However, the entropy
+profile Hⱼ(G_n) then converges to Hⱼ(W) because entropy is continuous
+on the finite space Typesⱼ.  So this direction is actually solid once
+stated correctly — the earlier error was overcomplicating a standard
+fact.
+
+**Corrected claim.**  For a graph sequence G_n → W in cut distance,
+for each fixed j:
+
+ Hⱼ(G_n) → Hⱼ(W)
+
+where Hⱼ(W) is the entropy of the j-vertex induced subgraph
+distribution of W.  This follows directly from the Graphon Sampling
+Lemma and continuity of entropy on a finite domain.
+
+### 3.3 Representation Stability (corrected)
+
+The claim that m_C = μⱼ(C)·C(n, j) is an "S_n-orbit size" is
+**incorrect**.  The symmetric group S_n acts on Ωⱼ, and the S_n-orbit
+of a subset W is the set of all j-subsets of V.  This orbit is
+transitive — there is only one orbit.  The multiplicity m_C counts
+how many j-subsets induce a given type, which is a **sampling
+statistic**, not a group-orbit size.
+
+The correct statement involves the **type frequency** as n grows:
+
+ lim_{n→∞} μⱼ^{(G_n)}(C) = t(C, W) / Σ t(C', W)
+
+which is a law-of-large-numbers result, not a representation-stability
+result.  The connection to representation theory (if one exists) would
+involve the **FI-module** structure of type multiplicities as n
+varies, but this requires a consistent embedding of V_n into V_{n+1}
+and is future work.
+
+---
+
+## 4. Application to Attention Heads (Heuristic)
 
 For attention graphs (thresholded attention matrices), the filtration
 parameter τ creates a 1-parameter family Δ(τ).  The phase boundaries
 j₁(τ), j₂(τ) trace curves in (j, τ) space.  The area between these
-curves — the "diverse region" — measures the **attentional capacity**
-of a head: large area means the head explores many combinatorial
-patterns; small area means it locks into a fixed structure.
+curves — the "diverse region" — is a candidate quantitative measure
+of **attentional capacity**.
 
-This gives a quantitative definition of **attention head
-specialization**: a specialized head has a narrow diverse region at a
-specific scale j, while a general-purpose head has a broad diverse
-region.
+This is an **interpretive heuristic**, not a theorem.  It is included
+to motivate the construction but does not form part of the core
+combinatorial claims.  A rigorous connection would require a model of
+attention in which the pushforward measure is shown to distinguish
+meaningful functional classes of heads with statistical significance.
 
-## 4. Summary of Claims
+---
+
+## 5. Summary of Actual Status
 
 | # | Statement | Status |
 |---|-----------|--------|
-| 1 | Hⱼ ≤ log₂(1 + Σ_i β_{i,j}) | Proved (Theorem 1) |
-| 2 | |Hⱼ(Δ) − Hⱼ(Δ')| ≤ k·j²/n² for k-edge edits | Proved (Theorem 3) |
-| 3 | μⱼ is a functor to Markov kernels | Formulated (§3.1) |
-| 4 | β_{i,j} ≥ 2^{(1−ε)Hⱼ} for some i,j | Conjecture (§3.2) |
-| 5 | Graphon convergence of μⱼ | Conjecture (§3.3) |
-| 6 | Representation stability of orbit multiplicities | Conjecture (§3.4) |
-| 7 | Phase area as attentional capacity | Application (§3.5) |
+| 1 | μⱼ is a well-defined pushforward measure on Typesⱼ | ✓ correct |
+| 2 | ℋ_{i,j} as decorated measure refines Hochster's formula | ✓ correct |
+| 3 | Hⱼ ≤ log₂ |Typesⱼ| | ✓ trivial bound |
+| 4 | Hⱼ is strictly finer than the Betti table | ✓ correct |
+| 5 | Stability: |Hⱼ(Δ) − Hⱼ(Δ')| ≤ k·C(n−2,j−2)/C(n,j)·log₂|Typesⱼ| | ✓ proved |
+| 6 | Phase classification (j₁, j₂) | ✓ valid construction |
+| 7 | Functor to Prob(𝒢ⱼ) | ⚠ correct target but heavy formalism |
+| 8 | Graphon convergence of Hⱼ | ⚠ true via standard sampling lemma |
+| 9 | Representation stability of type multiplicities | ✗ misidentified; replace with sampling statistics |
+| 10 | Attention head typology | heuristic |
+| 11 | Hⱼ ≤ log₂(1 + Σ β_{i,j}) | ✗ FALSE — withdrawn |
+| 12 | Phase bounds via Betti numbers | ✗ FALSE — withdrawn (depended on #11) |
 
-The publishable combinatorics result is: **The Hochster pushforward
-measure defines a new functorial invariant of simplicial complexes
-that satisfies an information-theoretic bound on syzygies and a
-stability theorem under edge perturbations.  For attention graphs,
-the phase structure of this invariant provides a quantitative
-typology of attention head behaviour.**
+## 6. What a Real Paper Would Contain
+
+A publishable combinatorics/TDA paper built on this work would have:
+
+1. **Definition** of μⱼ and ℋ_{i,j} as a decorated measure (Sections 1–2 above).
+2. **Stability theorem** (Section 2.2) — the one non-trivial inequality.
+3. **Graphon limit** (Section 3.2 corrected) — convergence of Hⱼ for
+   dense graph sequences, as a corollary of the Sampling Lemma.
+4. **Empirical demonstration** on attention graphs (GPT-2, Qwen) showing
+   the three-regime structure and its stability across prompts.
+5. **Phase area** as a heuristic classifier for attention heads
+   (explicitly marked as empirical, not derived).
+
+Items that would be removed or deferred:
+
+* The entropy–Betti inequality (false).
+* The categorical claim in full generality (deferred to a separate
+  categorical TDA paper).
+* Representation stability (misidentified; replaced with sampling LLN).
+
+The paper would be titled something like:
+
+> *"The Hochster Pushforward Measure: A Combinatorial Invariant of
+> Attention Graphs with a Stability Theorem"*
