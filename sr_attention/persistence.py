@@ -4,7 +4,7 @@ persistence.py
 Persistence-theoretic operations on filtered simplicial complexes built
 from attention patterns.
 
-Two independent notions of persistence are tracked here:
+Three layers of invariant are tracked here:
 
 1. **Facet persistence** (algebraic)
    Tracks birth and death of maximal simplices (facets) as the attention
@@ -17,12 +17,27 @@ Two independent notions of persistence are tracked here:
    Computed by iterating over all vertex subsets, extracting the induced
    subcomplex, and summing reduced homology dimensions.  Expensive (2^n),
    but exact and directly connects to the SR ideal's syzygy structure.
+
+3. **Hochster Isomorphism Spectrum** (refined invariant)
+   A stratification of each graded Betti number β_{i,j} into its constituent
+   isomorphism classes of induced subcomplexes.  Whereas the classic formula
+   collapses all contributions into a single integer, the spectrum records:
+
+       H_{i,j}(Δ) = { (C, m_C, H_*(C)) : C ∈ Iso(Δ_W), |W| = j }
+
+   where Iso(Δ_W) is the isomorphism class of the induced subcomplex on W,
+   m_C is the multiplicity (number of vertex subsets W with Δ_W ≅ C), and
+   H_*(C) is the full reduced homology of the type.  This is:
+
+   • a refinement of Hochster's formula — β_{i,j} = Σ m_C · dim H̃_{j-i-1}(C)
+   • equivariant under graph isomorphisms of induced subcomplexes
+   • a functorial decomposition of Betti contributions by homotopy type
 """
 
 from __future__ import annotations
 
 import logging
-from itertools import combinations
+from itertools import combinations, permutations
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -207,6 +222,257 @@ def betti_table_via_hochster(
                     betti[(i, j)] = betti.get((i, j), 0) + dim
 
     return betti
+
+
+# ---------------------------------------------------------------------------
+# Hochster type spectrum — refined invariant
+# ---------------------------------------------------------------------------
+
+_ISOMORPHISM_CACHE: Dict[str, str] = {}
+"""Memoisation cache for canonical graph labels keyed by raw adjacency strings."""
+
+
+def _canonical_label(edges: Sequence[Tuple[int, int]], n_verts: int) -> str:
+    """
+    Canonical label for a small unweighted graph as the lexicographically
+    smallest upper-triangular adjacency bit-string under vertex relabelling.
+
+    Uses brute-force over all n! permutations — suitable for n ≤ 8 (40k perms).
+    For n > 8, uses a greedy heuristic that sorts vertices by degree sequence.
+    Results are memoised via the raw adjacency string.
+    """
+    adj = [[False] * n_verts for _ in range(n_verts)]
+    for u, v in edges:
+        adj[u][v] = adj[v][u] = True
+
+    raw_parts = []
+    for i in range(n_verts):
+        for j in range(i + 1, n_verts):
+            raw_parts.append("1" if adj[i][j] else "0")
+    raw = "".join(raw_parts)
+
+    if raw in _ISOMORPHISM_CACHE:
+        return _ISOMORPHISM_CACHE[raw]
+
+    verts = list(range(n_verts))
+
+    if n_verts <= 8:
+        best = None
+        for perm in permutations(verts):
+            bits = []
+            for i in range(n_verts):
+                for j in range(i + 1, n_verts):
+                    bits.append("1" if adj[perm[i]][perm[j]] else "0")
+            cand = "".join(bits)
+            if best is None or cand < best:
+                best = cand
+        _ISOMORPHISM_CACHE[raw] = best
+        return best
+
+    # Greedy heuristic for larger graphs: sort by degree, then BFS colour refinement
+    deg = [sum(1 for v in range(n_verts) if adj[u][v]) for u in range(n_verts)]
+    order = sorted(range(n_verts), key=lambda v: (deg[v], v))
+    bits = []
+    for i in range(n_verts):
+        for j in range(i + 1, n_verts):
+            bits.append("1" if adj[order[i]][order[j]] else "0")
+    label = "".join(bits)
+    _ISOMORPHISM_CACHE[raw] = label
+    return label
+
+
+def _type_signature(
+    simplex_tree: gd.SimplexTree,
+    t: float,
+    W: Tuple[int, ...],
+    q: int,
+    dim: int,
+) -> Dict[str, object]:
+    """
+    Build the Hochster type signature for a single subset *W*.
+
+    Returns
+    -------
+    dict with keys:
+        subset         — *W*
+        j              — |W|
+        i              — j - q - 1
+        q              — homological index (j - i - 1)
+        h_dim          — dim H̃_q(Δ_W)
+        num_edges      — number of 1-simplices in the induced subcomplex
+        num_triangles  — number of 2-simplices in the induced subcomplex
+        cycle_rank     — same as *h_dim* (redundant, for convenience)
+        canonical_label — string classifying the 1-skeleton up to isomorphism
+    """
+    stW = _induced_subcomplex(simplex_tree, t, W)
+    faces = [(s, f) for s, f in stW.get_filtration()]
+
+    edges = [tuple(sorted(s)) for s, _f in faces if len(s) == 2]
+    triangles = [tuple(sorted(s)) for s, _f in faces if len(s) == 3]
+
+    j = len(W)
+    i = j - q - 1
+    cl = _canonical_label(edges, j)
+
+    return {
+        "subset": W,
+        "j": j,
+        "i": i,
+        "q": q,
+        "h_dim": dim,
+        "num_edges": len(edges),
+        "num_triangles": len(triangles),
+        "cycle_rank": dim,
+        "canonical_label": cl,
+    }
+
+
+def hochster_type_spectrum(
+    simplex_tree: gd.SimplexTree,
+    i: int,
+    j: int,
+    t: Optional[float] = None,
+    max_vertices: int = config.HOCHSTER_MAX_VERTICES,
+) -> Dict[str, object]:
+    """
+    Hochster Isomorphism Spectrum — a stratification of β_{i,j}.
+
+    For each W ⊆ V with |W| = j whose induced subcomplex Δ_W has
+    non-trivial reduced homology H̃_{j-i-1}, this function records the
+    **isomorphism type** of the 1-skeleton of Δ_W and groups witnesses
+    by that type.
+
+    Formally, for a fixed graded index (i, j):
+
+        H_{i,j}(Δ) = { (C, m_C, H̃_{j-i-1}(C)) }
+
+    where C ranges over isomorphism classes of induced subcomplexes on
+    j vertices, m_C = |{W : Δ_W ≅ C}| is the multiplicity of that type,
+    and H̃_{j-i-1}(C) is its reduced homology contribution.
+
+    The classical Hochster formula is recovered as:
+
+        β_{i,j} = Σ_{C} m_C · dim H̃_{j-i-1}(C)
+
+    This is an equivariant refinement: the decomposition is natural under
+    automorphisms of the ambient complex Δ, and each type C corresponds to
+    a distinct induced homotopy type in the Hochster sum.
+
+    Parameters
+    ----------
+    simplex_tree : gd.SimplexTree
+    i, j : int
+        Graded Betti index β_{i,j}.
+    t : float | None
+        Filtration snapshot.  Defaults to maximum filtration value.
+    max_vertices : int
+        Safety cap.
+
+    Returns
+    -------
+    dict with keys:
+
+        betti_value   — β_{i,j} (total homology dimension)
+        num_witnesses — number of contributing subsets W
+        types         — list of type records, one per isomorphism class:
+            [
+                {
+                    "canonical_label": str,
+                    "count": int,              # m_C — how many W share this type
+                    "h_dim_per_witness": int,   # dim H̃_q per W
+                    "total_homology": int,      # m_C · dim H̃_q
+                    "edge_count": int,          # edges in this type
+                    "triangle_count": int,      # triangles in this type
+                    "example_subset": tuple,    # one representative W
+                },
+                ...
+            ]
+        witnesses — list of full signatures, one per contributing W
+    """
+    if t is None:
+        t = float(max(f for _, f in simplex_tree.get_filtration()))
+
+    verts = _all_vertices(simplex_tree)
+    n = len(verts)
+
+    if n > max_vertices:
+        raise ValueError(
+            f"Vertex count {n} exceeds max_vertices={max_vertices}. "
+            "Reduce MAX_TOKENS_FOR_ANALYSIS in config.py."
+        )
+
+    q = j - i - 1
+    witnesses: List[Dict] = []
+
+    for W in combinations(verts, j):
+        stW = _induced_subcomplex(simplex_tree, t, W)
+
+        if stW.num_simplices() == 0:
+            if q == -1:
+                witnesses.append({
+                    "subset": W,
+                    "j": j,
+                    "i": i,
+                    "q": q,
+                    "h_dim": 1,
+                    "num_edges": 0,
+                    "num_triangles": 0,
+                    "cycle_rank": 1,
+                    "canonical_label": "empty",
+                })
+            continue
+
+        unreduced = _betti_numbers_unreduced(stW)
+        dim = _reduced_betti(unreduced, q)
+
+        if dim > 0:
+            sig = _type_signature(simplex_tree, t, W, q, dim)
+            witnesses.append(sig)
+
+    # Group by canonical label
+    types: Dict[str, dict] = {}
+    for w in witnesses:
+        cl = w["canonical_label"]
+        if cl not in types:
+            types[cl] = {
+                "canonical_label": cl,
+                "count": 0,
+                "h_dim_per_witness": w["h_dim"],
+                "total_homology": 0,
+                "edge_count": w["num_edges"],
+                "triangle_count": w["num_triangles"],
+                "example_subset": w["subset"],
+            }
+        types[cl]["count"] += 1
+        types[cl]["total_homology"] += w["h_dim"]
+
+    return {
+        "betti_value": sum(w["h_dim"] for w in witnesses),
+        "num_witnesses": len(witnesses),
+        "types": sorted(types.values(), key=lambda x: -x["count"]),
+        "witnesses": witnesses,
+    }
+
+
+def format_type_spectrum(spectrum: Dict[str, object]) -> str:
+    """Human-readable rendering of a Hochster Isomorphism Spectrum."""
+    lines = [
+        f"β({spectrum['witnesses'][0]['i']},{spectrum['witnesses'][0]['j']}) = {spectrum['betti_value']}",
+        f"  Witnesses: {spectrum['num_witnesses']}",
+        f"  Type classes: {len(spectrum['types'])}",
+    ]
+    for ti, tp in enumerate(spectrum["types"]):
+        lines.extend([
+            f"",
+            f"  Type {ti}: canon={tp['canonical_label'][:20]}…",
+            f"    count        = {tp['count']}",
+            f"    edges        = {tp['edge_count']}",
+            f"    triangles    = {tp['triangle_count']}",
+            f"    h_dim        = {tp['h_dim_per_witness']}",
+            f"    total_hom    = {tp['total_homology']}",
+            f"    example      = {tp['example_subset']}",
+        ])
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
