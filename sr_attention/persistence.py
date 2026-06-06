@@ -138,7 +138,7 @@ def _betti_numbers_unreduced(st: gd.SimplexTree) -> Dict[int, int]:
     """Compute unreduced Betti numbers for a static SimplexTree."""
     if st.num_simplices() == 0:
         return {}
-    st.compute_persistence(persistence_dim_max=True)
+    st.compute_persistence(homology_coeff_field=2, persistence_dim_max=True)
     betti: Dict[int, int] = {}
     for dim in range(10):
         intervals = st.persistence_intervals_in_dimension(dim)
