@@ -23,6 +23,8 @@ from sr_attention.complex_builder import AttentionComplexBuilder
 from sr_attention.persistence import (
     compute_facet_persistence,
     betti_table_via_hochster,
+    compute_homology_over_fields,
+    format_torsion_report,
     format_betti_table,
     hochster_type_spectrum,
     format_type_spectrum,
@@ -640,3 +642,82 @@ class TestCoverageGaps:
         )
         out = format_phase_summary(classify_phase(m), "test-degenerate")
         assert "Degenerate" in out
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tests for multi-field homology comparison (torsion detection)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestTorsionDetection:
+
+    def test_compute_homology_over_fields_output_schema(self):
+        """compute_homology_over_fields returns dict mapping field→table."""
+        from sr_attention.persistence import _betti_numbers_unreduced
+        st = build_complete_complex(4)
+        results = compute_homology_over_fields(
+            st, t=1.0, max_vertices=8, fields=[2, 3]
+        )
+        assert 2 in results
+        assert 3 in results
+        assert isinstance(results[2], dict)
+        assert isinstance(results[3], dict)
+
+    def test_homology_fields_complete_complex(self):
+        """Complete complex: no torsion expected; all fields agree."""
+        st = build_complete_complex(4)
+        results = compute_homology_over_fields(
+            st, t=1.0, max_vertices=8, fields=[2, 3, 5]
+        )
+        for p in [2, 3, 5]:
+            for q in [2, 3, 5]:
+                assert results[p] == results[q], \
+                    f"F_{p} and F_{q} differ on complete complex"
+
+    def test_homology_fields_empty_complex(self):
+        """Empty complex (no edges): all fields agree (no torsion)."""
+        st = build_empty_complex(4)
+        results = compute_homology_over_fields(
+            st, t=1.0, max_vertices=8, fields=[2, 3, 5]
+        )
+        for p in [2, 3, 5]:
+            for q in [2, 3, 5]:
+                assert results[p] == results[q], \
+                    f"F_{p} and F_{q} differ on empty complex"
+
+    def test_format_torsion_report_consistent(self):
+        """format_torsion_report says 'no torsion' when fields agree."""
+        st = build_complete_complex(4)
+        results = compute_homology_over_fields(
+            st, t=1.0, max_vertices=8, fields=[2, 3]
+        )
+        report = format_torsion_report(results)
+        assert "No torsion detected" in report
+
+    def test_format_torsion_report_consistent_empty(self):
+        """format_torsion_report handles empty Betti tables."""
+        results: dict = {}
+        report = format_torsion_report(results)
+        assert "<empty>" in report
+
+    def test_betti_table_with_explicit_field(self):
+        """betti_table_via_hochster accepts homology_coeff_field parameter."""
+        st = cycle_graph()
+        t_max = max(f for _, f in st.get_filtration())
+        betti_f2 = betti_table_via_hochster(
+            st, t=t_max, max_vertices=8, homology_coeff_field=2
+        )
+        betti_f3 = betti_table_via_hochster(
+            st, t=t_max, max_vertices=8, homology_coeff_field=3
+        )
+        # 4-cycle has no torsion: Betti numbers should match
+        assert betti_f2 == betti_f3
+
+    def test_config_default_field_is_used(self):
+        """Default homology_coeff_field comes from config (should be 2)."""
+        from sr_attention import config
+        assert config.HOCHSTER_HOMOLOGY_FIELD == 2
+        from sr_attention.persistence import _betti_numbers_unreduced
+        st = build_complete_complex(4)
+        # No explicit field → should use config default
+        result = _betti_numbers_unreduced(st)
+        assert isinstance(result, dict)

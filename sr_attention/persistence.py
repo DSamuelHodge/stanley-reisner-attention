@@ -134,11 +134,31 @@ def _induced_subcomplex(
     return sub
 
 
-def _betti_numbers_unreduced(st: gd.SimplexTree) -> Dict[int, int]:
-    """Compute unreduced Betti numbers for a static SimplexTree."""
+def _betti_numbers_unreduced(
+    st: gd.SimplexTree,
+    homology_coeff_field: int = config.HOCHSTER_HOMOLOGY_FIELD,
+) -> Dict[int, int]:
+    """Compute unreduced Betti numbers for a static SimplexTree.
+
+    Parameters
+    ----------
+    st : gd.SimplexTree
+    homology_coeff_field : int
+        Prime p for homology over F_p.  Default from config.
+        Gudhi supports primes up to 46337.
+        See `compute_homology_over_fields()` for multi-field comparison.
+
+    Returns
+    -------
+    dict[int, int]
+        Unreduced Betti numbers keyed by dimension.
+    """
     if st.num_simplices() == 0:
         return {}
-    st.compute_persistence(persistence_dim_max=True)
+    st.compute_persistence(
+        homology_coeff_field=homology_coeff_field,
+        persistence_dim_max=True,
+    )
     betti: Dict[int, int] = {}
     for dim in range(10):
         intervals = st.persistence_intervals_in_dimension(dim)
@@ -165,17 +185,26 @@ def betti_table_via_hochster(
     simplex_tree: gd.SimplexTree,
     t: Optional[float] = None,
     max_vertices: int = config.HOCHSTER_MAX_VERTICES,
+    homology_coeff_field: int = config.HOCHSTER_HOMOLOGY_FIELD,
 ) -> Dict[Tuple[int, int], int]:
     """
     Compute graded Betti numbers β_{i,j}(k[Δ_t]) via Hochster's formula:
 
         β_{i,j} = Σ_{W ⊆ V, |W|=j} dim H̃_{j-i-1}(Δ_W; k)
 
+    where k = F_{p} for prime *homology_coeff_field* = p.
+
     This is the deepest algebraic invariant in the package: it connects the
     SR ideal's minimal free resolution to the homology of every induced
     subcomplex.  In attention terms, a non-zero β_{i,j} means there exists a
-    set of j tokens whose induced co-attention complex has a (j−i−1)-dimensional
+    set of j tokens whose induced co-attention complex has a (j-i-1)-dimensional
     topological hole — a forbidden pattern of that homological type.
+
+    **Torsion warning.** Betti numbers depend on the coefficient field.
+    A value β_{i,j} computed over F_p may differ from the value over F_q for
+    distinct primes p, q, indicating p- or q-torsion in the integer homology
+    of some induced subcomplex.  Use ``compare_homology_over_fields()`` to
+    detect torsion.
 
     Parameters
     ----------
@@ -184,6 +213,8 @@ def betti_table_via_hochster(
         Filtration snapshot.  Defaults to maximum filtration value.
     max_vertices : int
         Safety cap.  Raises ValueError if exceeded (computation is O(2^n)).
+    homology_coeff_field : int
+        Prime p for homology over F_p.  Default from config.
 
     Returns
     -------
@@ -215,7 +246,9 @@ def betti_table_via_hochster(
                         betti[(i, j)] = betti.get((i, j), 0) + 1
                 continue
 
-            unreduced = _betti_numbers_unreduced(stW)
+            unreduced = _betti_numbers_unreduced(
+                stW, homology_coeff_field=homology_coeff_field
+            )
 
             for i in range(j + 1):
                 q   = j - i - 1
@@ -335,6 +368,7 @@ def hochster_type_spectrum(
     j: int,
     t: Optional[float] = None,
     max_vertices: int = config.HOCHSTER_MAX_VERTICES,
+    homology_coeff_field: int = config.HOCHSTER_HOMOLOGY_FIELD,
 ) -> Dict[str, object]:
     """
     Hochster Isomorphism Spectrum — a stratification of β_{i,j}.
@@ -424,7 +458,9 @@ def hochster_type_spectrum(
                 })
             continue
 
-        unreduced = _betti_numbers_unreduced(stW)
+        unreduced = _betti_numbers_unreduced(
+            stW, homology_coeff_field=homology_coeff_field
+        )
         dim = _reduced_betti(unreduced, q)
 
         if dim > 0:
@@ -464,6 +500,7 @@ def hochster_pushforward_measure(
     simplex_tree: gd.SimplexTree,
     t: Optional[float] = None,
     max_vertices: int = config.HOCHSTER_MAX_VERTICES,
+    homology_coeff_field: int = config.HOCHSTER_HOMOLOGY_FIELD,
 ) -> Dict[str, object]:
     """
     Pushforward measure from induced subcomplexes to isomorphism types.
@@ -566,7 +603,9 @@ def hochster_pushforward_measure(
             if stW.num_simplices() == 0:
                 unreduced = {}
             else:
-                unreduced = _betti_numbers_unreduced(stW)
+                unreduced = _betti_numbers_unreduced(
+                    stW, homology_coeff_field=homology_coeff_field
+                )
 
             cycle_rank: Dict[str, int] = {}
             for q in range(-1, j):
@@ -1244,6 +1283,162 @@ def build_empty_complex(n_vertices: int) -> gd.SimplexTree:
     for v in range(n_vertices):
         st.insert([v], filtration=0.0)
     return st
+
+
+# ---------------------------------------------------------------------------
+# Multi-field homology comparison
+# ---------------------------------------------------------------------------
+
+def compute_homology_over_fields(
+    simplex_tree: gd.SimplexTree,
+    t: Optional[float] = None,
+    max_vertices: int = config.HOCHSTER_MAX_VERTICES,
+    fields: Optional[Sequence[int]] = None,
+) -> Dict[int, Dict[Tuple[int, int], int]]:
+    """
+    Compute graded Betti tables over multiple coefficient fields F_p.
+
+    Comparing Betti numbers across fields detects torsion in the integer
+    homology of induced subcomplexes.  By the Universal Coefficient Theorem:
+
+        rank H_q(Δ_W; Z) = dim_F H_q(Δ_W; F)   for char(F) = 0
+
+    and for a field F_p of prime characteristic p:
+
+        dim_{F_p} H_q(Δ_W; F_p) = rank H_q(Δ_W; Z)
+                                  + dim_{F_p} Tor(H_{q-1}(Δ_W; Z), F_p)
+
+    Hence a Betti number that *differs* between F_2 and F_3 signals torsion
+    of order 2 or 3 (or both) in the integer homology of some induced
+    subcomplex.  If β_{i,j}^{F_p} > β_{i,j}^{F_q} for distinct primes p, q,
+    there is p-torsion at that (i, j) index.
+
+    Parameters
+    ----------
+    simplex_tree : gd.SimplexTree
+    t : float | None
+        Filtration snapshot.  Defaults to maximum filtration value.
+    max_vertices : int
+        Safety cap passed to ``betti_table_via_hochster()``.
+    fields : sequence of int | None
+        Primes p for homology over F_p.  Default: [2, 3, 5, 7, 11, 997].
+        The last entry (997) serves as a proxy for characteristic-zero
+        (no small torsion), since Gudhi does not support Q directly.
+        Any prime up to 46337 is supported.
+
+    Returns
+    -------
+    dict[int, dict]
+        Mapping *p* → Betti table over F_p.
+    """
+    if fields is None:
+        fields = [2, 3, 5, 7, 11, 997]
+
+    results: Dict[int, Dict[Tuple[int, int], int]] = {}
+    for p in fields:
+        results[p] = betti_table_via_hochster(
+            simplex_tree,
+            t=t,
+            max_vertices=max_vertices,
+            homology_coeff_field=p,
+        )
+    return results
+
+
+def format_torsion_report(
+    results: Dict[int, Dict[Tuple[int, int], int]],
+) -> str:
+    """
+    Format a human-readable torsion detection report from multi-field
+    Betti table comparison.
+
+    For each graded index (i, j) where the Betti number varies across
+    fields, the report flags potential torsion and lists the values per
+    field.
+
+    Parameters
+    ----------
+    results : dict
+        Output of ``compute_homology_over_fields()``.
+
+    Returns
+    -------
+    str
+        Formatted report.
+    """
+    primes = sorted(results.keys())
+    if not primes:
+        return "<empty>"
+
+    # Collect all (i, j) indices across all fields
+    all_indices: set[Tuple[int, int]] = set()
+    for table in results.values():
+        all_indices.update(table.keys())
+
+    if not all_indices:
+        return "All Betti tables are empty (no homology)."
+
+    detected: List[Dict] = []
+
+    for idx in sorted(all_indices):
+        vals = {p: results[p].get(idx, 0) for p in primes}
+        unique_vals = set(vals.values())
+        if len(unique_vals) > 1:
+            # Torsion detected
+            detected.append({
+                "index": idx,
+                "values": vals,
+                "min_val": min(unique_vals),
+                "max_val": max(unique_vals),
+            })
+
+    if not detected:
+        return (
+            f"Betti numbers are consistent across all {len(primes)} fields tested "
+            f"(F_{{{', F_'.join(str(p) for p in primes)}}}).\n"
+            "No torsion detected in the tested primes.\n"
+            "⚠  This does NOT rule out torsion of order outside the tested set."
+        )
+
+    lines = [
+        f"TORSION DETECTED — Betti numbers vary across coefficient fields",
+        f"Fields tested: F_{{{', F_'.join(str(p) for p in primes)}}}",
+        f"Affected graded indices: {len(detected)}",
+        "",
+    ]
+
+    lines.append(f"{'i':>3} {'j':>3}  " + "".join(f"F_{p:<4d}" for p in primes) + "  Δ")
+    lines.append("    " + "─" * (12 + 6 * len(primes)))
+
+    for d in detected:
+        i, j = d["index"]
+        delta = d["max_val"] - d["min_val"]
+        row = f"{i:>3} {j:>3}  "
+        for p in primes:
+            row += f"{d['values'][p]:<6d} "
+        row += f"  {delta}"
+        lines.append(row)
+
+    lines.extend([
+        "",
+        "Interpretation:",
+        "  β_{i,j}^{F_p} - β_{i,j}^{F_q} > 0  ⇒  p- or q-torsion in integer homology",
+        "  at some induced subcomplex contributing to that (i, j).",
+    ])
+
+    # Group indices by torsion type
+    for p in primes:
+        discrepant = [
+            d for d in detected
+            if d["values"][p] != d["min_val"]
+        ]
+        if discrepant:
+            lines.append(
+                f"  F_{p} detects torsion at: "
+                + ", ".join(f"({d['index'][0]},{d['index'][1]})" for d in discrepant)
+            )
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

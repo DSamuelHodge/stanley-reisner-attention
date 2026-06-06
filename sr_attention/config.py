@@ -98,6 +98,16 @@ MAX_TOKENS_FOR_ANALYSIS: int = 16
 # The computation is O(2^n * n^2) — beyond ~12 vertices it becomes slow.
 HOCHSTER_MAX_VERTICES: int = 12
 
+# Homology coefficient field (must be a prime).
+#   p=2   → F_2  — detects 2-torsion in homology
+#   p=11  → F_11 — Gudhi default; detects 11-torsion
+#   p=997 → F_997 — approximates characteristic-zero for small complexes
+# To detect torsion of order p, compute over F_p and compare with F_q (q ≠ p).
+# Gudhi supports primes up to 46337.
+# WARNING: Gudhi's SimplexTree.compute_persistence() default is 11
+# (not 2). The code now passes this value explicitly for reproducibility.
+HOCHSTER_HOMOLOGY_FIELD: int = 2
+
 # ---------------------------------------------------------------------------
 # PERSISTENCE parameters
 # ---------------------------------------------------------------------------

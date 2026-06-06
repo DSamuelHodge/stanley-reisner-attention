@@ -130,6 +130,61 @@ python scripts/run_analysis.py \
     --layer  0 \
     --head   0 \
     --all-heads
+
+# With torsion detection (multi-field homology comparison)
+python scripts/run_analysis.py \
+    --model  Qwen/Qwen2.5-0.5B \
+    --prompt "The cat sat on the mat." \
+    --layer  0 \
+    --head   0 \
+    --torsion-check
+```
+
+---
+
+## Torsion Detection
+
+Betti numbers computed via Hochster's formula depend on the coefficient field F_p.
+By the Universal Coefficient Theorem:
+
+```
+dim_{F_p} H_q(Δ_W; F_p) = rank H_q(Δ_W; Z) + dim_{F_p} Tor(H_{q-1}(Δ_W; Z), F_p)
+```
+
+A Betti number that *differs* between F_2 and F_3 signals 2- or 3-torsion in the
+integer homology of some induced subcomplex.  Two functions automate this check:
+
+```python
+from sr_attention import compute_homology_over_fields, format_torsion_report
+
+# Compare Betti tables across F_2, F_3, F_5, F_7, F_11, F_997
+results = compute_homology_over_fields(st, max_vertices=12)
+
+print(format_torsion_report(results))
+# Output:
+#   TORSION DETECTED — Betti numbers vary across coefficient fields
+#   Fields tested: F_2, F_3, F_5, F_7, F_11, F_997
+#   Affected graded indices: 1
+#     i   j   F_2   F_3   F_5   F_7   F_11  F_997  Δ
+#     ─────────────────────────────────────────────
+#     1   3   1     0     0     0     0     0     1
+#
+#   Interpretation:
+#     β_{i,j}^{F_p} - β_{i,j}^{F_q} > 0  ⇒  p- or q-torsion in integer homology
+```
+
+The default homology field for all computations is set in `config.HOCHSTER_HOMOLOGY_FIELD`
+(default: `2`, i.e. F_2).  **Important:** Gudhi's `SimplexTree.compute_persistence()`
+defaults to 11 (F_11), not 2 — the library passes the config value explicitly for
+reproducibility.
+
+Default field list for `compute_homology_over_fields()`: `[2, 3, 5, 7, 11, 997]`.
+The entry 997 serves as a proxy for characteristic-zero (no small torsion), since
+Gudhi does not support ℚ directly.  Any prime up to 46337 is supported.
+
+```bash
+# CLI shortcut
+python scripts/run_analysis.py --model Qwen/Qwen2.5-0.5B --prompt "..." --torsion-check
 ```
 
 ---
@@ -139,7 +194,7 @@ python scripts/run_analysis.py \
 ```
 sr_attention/
 │
-├── __init__.py          # Public API surface
+├── __init__.py          # Public API surface (lists every exported symbol)
 ├── config.py            # All constants and tuneable parameters ← edit here
 │
 ├── extraction.py        # TransformerLens ≥3 model loading + cache extraction
@@ -160,10 +215,12 @@ sr_attention/
 │                        # build_complex_from_facets()
 │
 ├── persistence.py       # Persistence-theoretic operations
-│                        # compute_facet_persistence()
 │                        # betti_table_via_hochster()      ← Hochster's formula
-│                        # format_betti_table()
+│                        # compute_homology_over_fields()  ← multi-field torsion detection
+│                        # format_torsion_report()
+│                        # compute_facet_persistence()
 │                        # summarise_persistence()
+│                        # format_betti_table()
 │
 └── utils.py             # Token labels, display, numpy helpers
 
@@ -193,6 +250,7 @@ Key parameters and their effects:
 | `FILTRATION_N_STEPS` | `20` | Threshold resolution for persistence |
 | `SYMMETRIZE_MODE` | `"mean"` | How to symmetrize attention matrix |
 | `HOCHSTER_MAX_VERTICES` | `12` | Hard cap for Betti computation |
+| `HOCHSTER_HOMOLOGY_FIELD` | `2` | Coefficient field F_p (prime ≤ 46337). Gudhi default is 11 — set explicitly here |
 
 ---
 

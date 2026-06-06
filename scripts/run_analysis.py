@@ -44,6 +44,8 @@ from sr_attention.sr_core import (
 from sr_attention.persistence import (
     compute_facet_persistence,
     betti_table_via_hochster,
+    compute_homology_over_fields,
+    format_torsion_report,
     format_betti_table,
     summarise_persistence,
 )
@@ -71,6 +73,8 @@ def parse_args():
                    help="Max tokens to use for algebraic analysis (Hochster is O(2^n)).")
     p.add_argument("--all-heads", action="store_true",
                    help="Print SR generator counts for all heads in the chosen layer.")
+    p.add_argument("--torsion-check", action="store_true",
+                   help="Run multi-field torsion detection (compares F_2, F_3, F_5, F_7, F_11).")
     return p.parse_args()
 
 
@@ -163,7 +167,22 @@ def main():
         print(f"  Skipped: {e}")
 
     # ------------------------------------------------------------------ #
-    # 8. Optional: all-heads summary
+    # 8. Optional: torsion check across coefficient fields
+    # ------------------------------------------------------------------ #
+    if args.torsion_check:
+        print(f"\nTorsion check (multi-field homology comparison):")
+        try:
+            torsion_results = compute_homology_over_fields(
+                st_static,
+                max_vertices=n_for_hochster,
+                fields=[2, 3, 5, 7, 11],
+            )
+            print(format_torsion_report(torsion_results))
+        except ValueError as e:
+            print(f"  Skipped: {e}")
+
+    # ------------------------------------------------------------------ #
+    # 9. Optional: all-heads summary
     # ------------------------------------------------------------------ #
     if args.all_heads:
         print(f"\nSR generator counts — Layer {args.layer}, all heads:")
